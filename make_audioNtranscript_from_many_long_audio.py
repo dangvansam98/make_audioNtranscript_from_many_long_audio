@@ -7,10 +7,7 @@ from time import sleep
 import  csv
 import numpy as np
 from pydub import AudioSegment
-import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 import librosa
-from inaSpeechSegmenter import Segmenter, seg2csv
 import  wave
 import audioop
 import scipy
@@ -161,6 +158,9 @@ def makeTransFile(in_file, out_file = ''):
     tran_file.write(file_name + ' ' + text + '\n')
     #break
 
+import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+from inaSpeechSegmenter import Segmenter, seg2csv
 
 def removeMusicAndCut(file_name, out_dir):
   print('\nREMOVE MUSIC AND CUT')
@@ -194,7 +194,7 @@ def removeMusicAndCutManyFile(d, o = None):
         else:
             removeMusicAndCut(d+'/'+f,o) #output dir is: <o>
 
-def requestAndWriteFile_GG(audio_dir_path, transcript_out_dir):
+def requestAndWriteFile_GG(audio_dir_path, transcript_out_dir, lang):
     audio_dir = audio_dir_path + '/'
     if not os.path.exists(audio_dir):
         print('Audio dir: "{}" not found! Plase check input dir'.format(audio_dir_path))
@@ -213,7 +213,7 @@ def requestAndWriteFile_GG(audio_dir_path, transcript_out_dir):
             continue
         else:
             b_data = open(audio_path,'rb')
-            res = ggRequest(b_data)
+            res = ggRequest(b_data, lang = lang)
             if res == None:
                 continue
             else:
@@ -232,15 +232,28 @@ def mergeTransFileToOne(trans_dir):
         wav = f.replace('.txt','')
         text_file.write(wav + ' ' + text + '\n')
 
-def runALL(datadir):
+def runALL(datadir, lang):
     removeMusicAndCutManyFile(datadir, datadir + '_cuted')
-    requestAndWriteFile_GG(datadir + '_cuted', datadir + '_cuted' + 'trans')
+    requestAndWriteFile_GG(datadir + '_cuted', datadir + '_cuted' + 'trans', lang = lang)
     #requestAndWriteFile_VTC_FPT(datadir + '_cuted', datadir + '_cuted' + 'trans')
     mergeTransFileToOne(datadir + '_cuted' + 'trans')
 
+import argparse
 if __name__ == "__main__":
-    datadir = 'wavfiles'
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--input" , type=str, required =True, help='path to long wav files dir!')
+    parser.add_argument('--lang', default = 'vi', type=str, help='language for transcript: https://cloud.google.com/speech-to-text/docs/languages')
+    parser.add_argument('--mode', choices=['spit','transcript','mergetrans', 'all'], default='all', type= str,help='\
+                        spit: remove music and split long file to many file\
+                        transcript: transcript a dir (wav files) output is dir (text files)\
+                        mergetrans: merge all transcript file to one .txt file\
+                        all: long audio files -> 1 audio dir (chunked audio files), 1 txt transcript file off chunked files')
+    args = parser.parse_args()
+    datadir = args.input
+    lang = args.lang
+    mode = args.mode
+    print(datadir, lang, mode)
     #removeMusicAndCutManyFile(datadir, datadir + '_cuted')
 
     #requestAndWriteFile_GG(datadir + '_cuted', datadir + '_cuted' + 'trans')
@@ -250,4 +263,13 @@ if __name__ == "__main__":
     #mergeTransFileToOne('GDCD12_trans')
     
     #cut long .wav file to many chunk (sentence) save to output folder and make transcript 
-    runALL(datadir)
+    if mode == 'all':
+        runALL(datadir, lang)
+    elif args.mode == 'split':
+        removeMusicAndCutManyFile(datadir, datadir + '_cuted')
+    elif mode == 'transcript':
+        requestAndWriteFile_GG(datadir, datadir + 'trans', lang)
+    elif mode == 'mergetrans':
+        mergeTransFileToOne(datadir)
+    else:
+        ValueError('Mode support are: all (default), split, transcript, mergetrans')
